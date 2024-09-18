@@ -1,8 +1,11 @@
 package balancers
 
 import (
+	"log"
+	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type RoundRobinBalancer struct {
@@ -54,4 +57,44 @@ func (rb *RoundRobinBalancer) AddTarget(target string) {
 	rb.rwMutex.Lock()
 	defer rb.rwMutex.Unlock()
 	rb.healthyTargets = append(rb.healthyTargets, target)
+}
+
+func healthCheck(target string) bool {
+	// Ping target server and return true if successful
+	_, err := http.Get(target)
+	// if error, return false and show error
+	if err != nil {
+		// print error
+		log.Printf("Server %s is not healthy: %v\n", target, err)
+		return false
+	}
+	return true
+
+}
+
+// Checks the health of servers at a specified interval (milliseconds)
+//
+//	lb (*balancers.RoundRobinBalancer): load balancer to health check
+//	intervalDuration (int): time in milliseconds between health checks
+func (rb *RoundRobinBalancer) RunHealthChecks(intervalDuration int) {
+	for {
+		log.Printf("Running health checks...")
+		// create new health targets slice
+		// loop through all targets looking for target to remove or add
+		newHealthyTargets := []string{}
+		for _, target := range rb.targets {
+			// if target is healthy track it
+			if healthCheck(target) {
+				newHealthyTargets = append(newHealthyTargets, target)
+			}
+		}
+
+		// update healthy targets
+		rb.rwMutex.Lock()
+		rb.healthyTargets = newHealthyTargets
+		rb.rwMutex.Unlock()
+
+		// Sleep for interval duration (milliseconds)
+		time.Sleep(time.Duration(intervalDuration) * time.Millisecond)
+	}
 }

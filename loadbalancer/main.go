@@ -78,8 +78,11 @@ func startServer(lbPort string, targets []string) {
 	// Set handler function
 	http.HandleFunc("/", handler(lb.NextTarget))
 	log.Printf("Server is listening on port %s...\n", lbPort)
+	// Run health checks on target list
+	go lb.RunHealthChecks(5000)
 	// Start server
 	log.Fatalf("Error starting server: %v", http.ListenAndServe(":"+lbPort, nil))
+
 }
 
 func main() {
