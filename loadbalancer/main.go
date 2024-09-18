@@ -71,14 +71,14 @@ func forwardRequest(target string, w http.ResponseWriter, r *http.Request) {
 }
 
 // Handles request and receives the post as an arguement
-func handler(lb *RoundRobinBalancer) http.HandlerFunc {
+func handler(lbNextTarget func() string) http.HandlerFunc {
 	// closure to handle request allow for parameter to be received
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		logRequest(r)
 
-		target := lb.NextTarget()
+		target := lbNextTarget()
 
 		forwardRequest(target, w, r)
 
@@ -90,7 +90,7 @@ func startServer(lbPort string, targets []string) {
 	// Create new round-robin load balancer
 	lb := NewRoundRobinBalancer(targets)
 	// Set handler function
-	http.HandleFunc("/", handler(lb))
+	http.HandleFunc("/", handler(lb.NextTarget))
 	log.Printf("Server is listening on port %s...\n", lbPort)
 	// Start server
 	log.Fatalf("Error starting server: %v", http.ListenAndServe(":"+lbPort, nil))
