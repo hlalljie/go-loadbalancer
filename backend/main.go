@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
@@ -37,6 +38,7 @@ func handler(listeningPort string) http.HandlerFunc {
 	}
 }
 
+// TODO: add error handling when server can't start on specified port
 func startServer(port string) {
 	// Set handler function
 	http.HandleFunc("/", handler(port))
@@ -46,5 +48,7 @@ func startServer(port string) {
 }
 
 func main() {
-	startServer("8000")
+	port := flag.String("p", "8001", "Port to listen on")
+	flag.Parse()
+	startServer(*port)
 }
