@@ -2,32 +2,13 @@ package main
 
 import (
 	"fmt"
+	"loadbalancer/balancers"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"sync/atomic"
 )
-
-type RoundRobinBalancer struct {
-	current uint64
-	targets []string
-}
-
-func NewRoundRobinBalancer(targets []string) *RoundRobinBalancer {
-	return &RoundRobinBalancer{targets: targets}
-	// Note: current is automatically initialized to 0 (zero value for uint64)
-}
-
-func (rb *RoundRobinBalancer) NextTarget() string {
-	// Atomic operation: Increments current and returns the new value
-	next := atomic.AddUint64(&rb.current, 1) - 1
-	// Print next
-	fmt.Printf("Next Request id: %d, target: %s\n", rb.current, rb.targets[next%uint64(len(rb.targets))])
-	// Gets the next target using the modulus of the current value and the number of targets
-	return rb.targets[next%uint64(len(rb.targets))]
-}
 
 // Logs request information to standard out
 func logRequest(r *http.Request) {
@@ -77,8 +58,13 @@ func handler(lbNextTarget func() string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		logRequest(r)
-
+		// find next target based on load balancing function
 		target := lbNextTarget()
+		// TODO: add error handling when server can't start on specified port
+		if target == "" {
+			log.Printf("Error: No target available for request\n")
+			return
+		}
 
 		forwardRequest(target, w, r)
 
@@ -88,7 +74,7 @@ func handler(lbNextTarget func() string) http.HandlerFunc {
 func startServer(lbPort string, targets []string) {
 
 	// Create new round-robin load balancer
-	lb := NewRoundRobinBalancer(targets)
+	lb := balancers.NewRoundRobinBalancer(targets)
 	// Set handler function
 	http.HandleFunc("/", handler(lb.NextTarget))
 	log.Printf("Server is listening on port %s...\n", lbPort)
