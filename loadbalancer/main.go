@@ -61,10 +61,9 @@ func forwardRequest(lb *balancers.RoundRobinBalancer, target string, w http.Resp
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, e error) {
 		lb.RemoveTarget(target)
-		log.Printf("Error forwarding request to %s: %v", target, e)
-		http.Error(w, "Error forwarding request", http.StatusInternalServerError)
+		log.Printf("Error forwarding request to %s: %v, retrying...", target, e)
+		http.Error(w, "Error forwarding request, retrying...", http.StatusInternalServerError)
 		proxyHandler(lb, w, r)
-		return
 	}
 
 	// Forward the request to the target server
