@@ -10,6 +10,21 @@ import (
 	"net/url"
 )
 
+func proxyHandler(lb *balancers.RoundRobinBalancer, w http.ResponseWriter, r *http.Request) {
+	log.Println("Retrying request")
+	logRequest(r)
+	// find next target based on load balancing function
+	target := lb.NextTarget()
+	// TODO: add error handling when server can't start on specified port
+	if target == "" {
+		log.Printf("Error: No target available for request\n")
+		return
+	}
+
+	// forward request
+	forwardRequest(lb, target, w, r)
+}
+
 // Logs request information to standard out
 func logRequest(r *http.Request) {
 	// Logs request
@@ -33,7 +48,7 @@ func logRequest(r *http.Request) {
 	}
 }
 
-func forwardRequest(target string, w http.ResponseWriter, r *http.Request) {
+func forwardRequest(lb *balancers.RoundRobinBalancer, target string, w http.ResponseWriter, r *http.Request) {
 	// Parse the target server URL
 	targetURL, err := url.Parse(target)
 	if err != nil {
@@ -44,6 +59,14 @@ func forwardRequest(target string, w http.ResponseWriter, r *http.Request) {
 	// Create a new reverse proxy
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, e error) {
+		lb.RemoveTarget(target)
+		log.Printf("Error forwarding request to %s: %v", target, e)
+		http.Error(w, "Error forwarding request", http.StatusInternalServerError)
+		proxyHandler(lb, w, r)
+		return
+	}
+
 	// Forward the request to the target server
 	proxy.ServeHTTP(w, r)
 
@@ -52,21 +75,21 @@ func forwardRequest(target string, w http.ResponseWriter, r *http.Request) {
 }
 
 // Handles request and receives the post as an arguement
-func handler(lbNextTarget func() string) http.HandlerFunc {
+func handler(lb *balancers.RoundRobinBalancer) http.HandlerFunc {
 	// closure to handle request allow for parameter to be received
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		logRequest(r)
 		// find next target based on load balancing function
-		target := lbNextTarget()
+		target := lb.NextTarget()
 		// TODO: add error handling when server can't start on specified port
 		if target == "" {
 			log.Printf("Error: No target available for request\n")
 			return
 		}
 
-		forwardRequest(target, w, r)
+		forwardRequest(lb, target, w, r)
 
 	}
 }
@@ -76,7 +99,7 @@ func startServer(lbPort string, targets []string) {
 	// Create new round-robin load balancer
 	lb := balancers.NewRoundRobinBalancer(targets)
 	// Set handler function
-	http.HandleFunc("/", handler(lb.NextTarget))
+	http.HandleFunc("/", handler(lb))
 	log.Printf("Server is listening on port %s...\n", lbPort)
 	// Run health checks on target list
 	go lb.RunHealthChecks(5000)
