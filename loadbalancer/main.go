@@ -18,6 +18,7 @@ func proxyHandler(lb *balancers.RoundRobinBalancer, w http.ResponseWriter, r *ht
 	// TODO: add error handling when server can't start on specified port
 	if target == "" {
 		log.Printf("Error: No target available for request\n")
+		http.Error(w, "No server available", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -85,6 +86,7 @@ func handler(lb *balancers.RoundRobinBalancer) http.HandlerFunc {
 		// TODO: add error handling when server can't start on specified port
 		if target == "" {
 			log.Printf("Error: No target available for request\n")
+			http.Error(w, "No server available", http.StatusServiceUnavailable)
 			return
 		}
 
